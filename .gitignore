@@ -59,3 +59,17 @@ tutorials/*
 tutorials/.DS_Store
 tutorials/*.dSYM
 benchmarking/*.dat
+
+# Visual studio and Intellij files
+.idea/
+.vs/
+*.sln
+*.vcxproj*
+*x64/
+CMakeLists.txt
+*cmake-build-debug/
+*.exe
+*gdb*
+*snap-stanford-vs/
+*.emb
+CodeDB/
