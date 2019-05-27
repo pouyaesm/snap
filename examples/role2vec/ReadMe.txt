@@ -20,6 +20,10 @@ Length of walk per source. Default is 80 (-l:)
 Number of walks per source. Default is 10 (-r:)
 Context size for optimization. Default is 10 (-k:)
 Number of epochs in SGD. Default is 1 (-e:)
+Number of node roles in n-partite graph, role 'out' is assumed to have id = tc * i. Default is 1. (-rc:)
+Weight of each role (role 'out' is excluded) to be chosen by random walker, nth weight is for nodes with role 'n' having id = tc * i + n. Default is '1,1,..'. (-rw:)
+Probability of staying in the same node role. Default is 0.75. (-sp:)
+Probability of teleporting from an 'in' node to its corresponding 'out' node. Default is 0. (-tp:)
 Verbose output. (-v)
 Graph is directed. (-dr)
 Graph is weighted. (-w)
@@ -28,4 +32,4 @@ Output random walks instead of embeddings. (-ow)
 /////////////////////////////////////////////////////////////////////////////
 
 Usage:
-./role2vec -i:graph/small.edgelist -o:emb/small.emb -l:3 -d:24 -dr -v
+./role2vec -i:graph/small.edgelist -o:emb/small.emb -l:3 -d:24 -rc:3 -rw:1,1 -sp:0.74 -dr -v

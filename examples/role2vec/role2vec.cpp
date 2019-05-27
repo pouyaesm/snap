@@ -1,10 +1,18 @@
 #include "stdafx.h"
-
+#include <sstream>
 #include "r2v.h"
 
 #ifdef USE_OPENMP
 #include <omp.h>
 #endif
+
+// Repeat a given string n times (used for array args initial value)
+std::string repeat_string(char* string, int n) {
+  std::ostringstream os;
+  for(int i = 0; i < n; i++)
+      os << string;
+  return os.str();
+}
 
 // Convert string "1.2,3.3" to float vector {1.2, 3.3}
 TFltV getFltV(TStr line){
@@ -26,8 +34,8 @@ TFltV getFltV(TStr line){
 
 void ParseArgs(int& argc, char* argv[], TStr& InFile, TStr& OutFile,
  int& Dimensions, int& WalkLen, int& NumWalks, int& WinSize, int& Iter,
- bool& Verbose, double& ParamP, double& ParamQ, bool& Directed, bool& Weighted,
-	bool& OutputWalks, int& typeCount, TFltV& typeWeight, double& teleportP) {
+ bool& Verbose, bool& Weighted,
+	bool& OutputWalks, int& roleCount, TFltV& roleWeight, double& stayP, double& teleportP) {
   Env = TEnv(argc, argv, TNotify::StdNotify);
   Env.PrepArgs(TStr::Fmt("\nAn algorithmic framework for representational learning on graphs."));
   InFile = Env.GetIfArgPrefixStr("-i:", "graph/karate.edgelist",
@@ -44,25 +52,23 @@ void ParseArgs(int& argc, char* argv[], TStr& InFile, TStr& OutFile,
    "Context size for optimization. Default is 10");
   Iter = Env.GetIfArgPrefixInt("-e:", 1,
    "Number of epochs in SGD. Default is 1");
-  ParamP = Env.GetIfArgPrefixFlt("-p:", 1,
-   "Return hyperparameter. Default is 1");
-  ParamQ = Env.GetIfArgPrefixFlt("-q:", 1,
-   "Inout hyperparameter. Default is 1");
-	typeCount = Env.GetIfArgPrefixInt("-tc:", 1,
-	 "Number of node types in n-partite graph, type 'out' is assumed to have id = tc * i. Default is 1.");
-	TStr initTypeWeight(std::string(std::to_string(typeCount).c_str(), ',').c_str());
-	typeWeight = getFltV(Env.GetIfArgPrefixStr("-tw:", initTypeWeight,
-	 "Weight of each type (type 'out' is excluded) to be chosen by random walker, "
-	 "nth weight is for nodes with type 'n' having id = tc * i + n. Default is '1,1,..'."));
-	teleportP = Env.GetIfArgPrefixFlt("-tp:", 0,
-	  "Probability of teleport from node of type n > 0 to its corresponding type 'out' (n = 0). Default is 0.");
+	roleCount = Env.GetIfArgPrefixInt("-rc:", 1,
+	 "Number of node roles in n-partite graph, role 'out' is assumed to have id = tc * i. Default is 1.");
+	TStr initRoleWeight(repeat_string("1,", roleCount - 1).c_str());
+	roleWeight = getFltV(Env.GetIfArgPrefixStr("-rw:", initRoleWeight,
+	 "Weight of each role (role 'out' is excluded) to be chosen by random walker, "
+	 "nth weight is for nodes with role 'n' having id = tc * i + n. Default is '1,1,..'."));
+	stayP = Env.GetIfArgPrefixFlt("-sp:", 0.75,
+	  "Probability of staying in the same node role. Default is 0.75.");
+  teleportP = Env.GetIfArgPrefixFlt("-tp:", 0,
+	  "Probability of teleporting from an 'in' node to its corresponding 'out' node. Default is 0.");
   Verbose = Env.IsArgStr("-v", "Verbose output.");
-  Directed = Env.IsArgStr("-dr", "Graph is directed.");
+  // Directed = Env.IsArgStr("-dr", "Graph is directed.");
   Weighted = Env.IsArgStr("-w", "Graph is weighted.");
   OutputWalks = Env.IsArgStr("-ow", "Output random walks instead of embeddings.");
 }
 
-void ReadGraph(TStr& InFile, bool& Directed, bool& Weighted, bool& Verbose, PWNet& InNet) {
+void ReadGraph(TStr& InFile, bool& Weighted, bool& Verbose, PWNet& InNet) {
   TFIn FIn(InFile);
   int64 LineCnt = 0;
   try {
@@ -81,7 +87,7 @@ void ReadGraph(TStr& InFile, bool& Directed, bool& Weighted, bool& Verbose, PWNe
       if (!InNet->IsNode(SrcNId)){ InNet->AddNode(SrcNId); }
       if (!InNet->IsNode(DstNId)){ InNet->AddNode(DstNId); }
       InNet->AddEdge(SrcNId,DstNId,Weight);
-      if (!Directed){ InNet->AddEdge(DstNId,SrcNId,Weight); }
+      InNet->AddEdge(DstNId,SrcNId,Weight);  // input graph is supposed to be not directed
       LineCnt++;
     }
     if (Verbose) { printf("Read %lld lines from %s\n", (long long)LineCnt, InFile.CStr()); }
@@ -129,19 +135,19 @@ void WriteOutput(TStr& OutFile, TIntFltVH& EmbeddingsHV, TVVec<TInt, int64>& Wal
 
 int main(int argc, char* argv[]) {
   TStr InFile,OutFile;
-	int Dimensions, WalkLen, NumWalks, WinSize, Iter, typeCount;
-  double ParamP, ParamQ;
-	TFltV typeWeight;
+	int Dimensions, WalkLen, NumWalks, WinSize, Iter, roleCount;
+	TFltV roleWeight;
+	double stayP;
 	double teleportP;
-  bool Directed, Weighted, Verbose, OutputWalks;
+  bool Weighted, Verbose, OutputWalks;
   ParseArgs(argc, argv, InFile, OutFile, Dimensions, WalkLen, NumWalks, WinSize,
-		Iter, Verbose, ParamP, ParamQ, Directed, Weighted, OutputWalks, typeCount, typeWeight, teleportP);
+		Iter, Verbose, Weighted, OutputWalks, roleCount, roleWeight, stayP, teleportP);
   PWNet InNet = PWNet::New();
   TIntFltVH EmbeddingsHV;
   TVVec <TInt, int64> WalksVV;
-  ReadGraph(InFile, Directed, Weighted, Verbose, InNet);
-  node2vec(InNet, ParamP, ParamQ, Dimensions, WalkLen, NumWalks, WinSize, Iter,
-		Verbose, OutputWalks, WalksVV, EmbeddingsHV, typeCount, typeWeight, teleportP);
+  ReadGraph(InFile, Weighted, Verbose, InNet);
+  role2vec(InNet, Dimensions, WalkLen, NumWalks, WinSize, Iter,
+		Verbose, OutputWalks, WalksVV, EmbeddingsHV, roleCount, roleWeight, stayP, teleportP);
   WriteOutput(OutFile, EmbeddingsHV, WalksVV, OutputWalks);
   return 0;
 }
