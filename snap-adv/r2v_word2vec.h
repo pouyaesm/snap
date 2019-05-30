@@ -2,8 +2,10 @@
 #define R_WORD_2_VEC_H
 
 ///Learns embeddings using SGD, Skip-gram with negative sampling.
-void LearnEmbeddings(TVVec<TInt, int64>& WalksVV, const int& Dimensions,
-  const int& WinSize, const int& Iter, const bool& Verbose,
+void LearnEmbeddings(TVVec<TInt, int64>& WalksVV,
+	const int& Dimensions, const int& WinSize, const int& roleCount,
+	const bool& roleNegativeSampling,
+	const int& Iter, const bool& Verbose,
   TIntFltVH& EmbeddingsHV);
 
 //Max x for e^x. Value taken from original word2vec code.

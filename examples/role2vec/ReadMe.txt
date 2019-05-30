@@ -26,6 +26,7 @@ Number of node roles in bipartite graph (including role 'out'). Default is 1. (-
 Probability of staying in the same node role. For a negative value, node2vec probabilities are used. Default is -1. (-sp:)
 Weight of each role (role 0 'out' is excluded) to be chosen by random walker, nth weight is for nodes with role 'n' having id = tc * i + n. Default is '1,1,..'. (-rw:)
 Probability of teleporting from an 'in' node to its corresponding 'out' node. Default is 0. (-tp:)
+Role based negative sampling. (-rn)
 Verbose output. (-v)
 Graph is directed. (-dr)
 Graph is weighted. (-w)

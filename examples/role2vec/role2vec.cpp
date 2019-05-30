@@ -35,7 +35,8 @@ TFltV getFltV(TStr line){
 void ParseArgs(int& argc, char* argv[], TStr& InFile, TStr& OutFile,
  int& Dimensions, int& WalkLen, int& NumWalks, int& WinSize, int& Iter,
  bool& Verbose, double& ParamP, double& ParamQ, bool& Weighted,
-	bool& OutputWalks, int& roleCount, TFltV& roleWeight, double& stayP, double& teleportP) {
+	bool& OutputWalks, int& roleCount, TFltV& roleWeight, double& stayP, double& teleportP,
+	bool& roleNegativeSampling) {
   Env = TEnv(argc, argv, TNotify::StdNotify);
   Env.PrepArgs(TStr::Fmt("\nAn algorithmic framework for representational learning on graphs."));
   InFile = Env.GetIfArgPrefixStr("-i:", "graph/karate.edgelist",
@@ -58,6 +59,9 @@ void ParseArgs(int& argc, char* argv[], TStr& InFile, TStr& OutFile,
    "Inout hyperparameter. Default is 1");
 	roleCount = Env.GetIfArgPrefixInt("-rc:", 1,
 	 "Number of node roles in bipartite graph (including role 'out'). Default is 1.");
+	if (roleCount <= 0){
+		throw "roleCount must be larger than zero";
+	}
 	stayP = Env.GetIfArgPrefixFlt("-sp:", -1,
 	  "Probability of staying in the same node role."
 		" For a negative value, node2vec probabilities are used. Default is -1.");
@@ -67,6 +71,7 @@ void ParseArgs(int& argc, char* argv[], TStr& InFile, TStr& OutFile,
 	 "nth weight is for nodes with role 'n' having id = tc * i + n. Default is '1,1,..'."));
   teleportP = Env.GetIfArgPrefixFlt("-tp:", 0,
 	  "Probability of teleporting from an 'in' node to its corresponding 'out' node. Default is 0.");
+	roleNegativeSampling = Env.IsArgStr("-rn", "Role based negative sampling.");
   Verbose = Env.IsArgStr("-v", "Verbose output.");
   // Directed = Env.IsArgStr("-dr", "Graph is directed.");
   Weighted = Env.IsArgStr("-w", "Graph is weighted.");
@@ -145,16 +150,17 @@ int main(int argc, char* argv[]) {
 	double stayP;
 	double teleportP;
 	double ParamP, ParamQ;
-  bool Weighted, Verbose, OutputWalks;
+  bool Weighted, Verbose, OutputWalks, roleNegativeSampling;
   ParseArgs(argc, argv, InFile, OutFile, Dimensions, WalkLen, NumWalks, WinSize,
-		Iter, Verbose, ParamP, ParamQ, Weighted, OutputWalks, roleCount, roleWeight, stayP, teleportP);
+		Iter, Verbose, ParamP, ParamQ, Weighted, OutputWalks, roleCount, roleWeight, stayP, teleportP,
+		roleNegativeSampling);
   PWNet InNet = PWNet::New();
   TIntFltVH EmbeddingsHV;
   TVVec <TInt, int64> WalksVV;
   ReadGraph(InFile, Weighted, Verbose, InNet);
   role2vec(InNet, Dimensions, WalkLen, NumWalks, WinSize, Iter,
 		Verbose, OutputWalks, WalksVV, EmbeddingsHV, ParamP, ParamQ,
-		roleCount, roleWeight, stayP, teleportP);
+		roleCount, roleWeight, stayP, teleportP, roleNegativeSampling);
   WriteOutput(OutFile, EmbeddingsHV, WalksVV, OutputWalks);
   return 0;
 }

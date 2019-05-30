@@ -1,6 +1,6 @@
 #include "stdafx.h"
 #include "Snap.h"
-#include "word2vec.h"
+#include "r2v_word2vec.h"
 
 //Code from https://github.com/nicholas-leonard/word2vec/blob/master/word2vec.c
 //Customized for SNAP and node2vec
@@ -65,7 +65,7 @@ void InitUnigramTable(TIntV& Vocab, TIntV& KTable, TFltV& UTable) {
 }
 
 int64 RndUnigramInt(TIntV& KTable, TFltV& UTable, TRnd& Rnd) {
-  TInt X = KTable[static_cast<int64>(Rnd.GetUniDev()*KTable.Len())];
+  TInt X = static_cast<int64>(Rnd.GetUniDev()*KTable.Len());
   double Y = Rnd.GetUniDev();
   return Y < UTable[X] ? X : KTable[X];
 }
@@ -90,8 +90,9 @@ void InitPosEmb(TIntV& Vocab, const int& Dimensions, TRnd& Rnd, TVVec<TFlt, int6
   }
 }
 
-void TrainModel(TVVec<TInt, int64>& WalksVV, const int& Dimensions,
-    const int& WinSize, const int& Iter, const bool& Verbose,
+void TrainModel(TVVec<TInt, int64>& WalksVV, TIntIntH& RnmH, TIntIntH& RnmBackH, const int& Dimensions,
+    const int& WinSize, const int& roleCount, const bool& roleNegativeSampling,
+		const int& Iter, const bool& Verbose,
     TIntV& KTable, TFltV& UTable, int64& WordCntAll, TFltV& ExpTable,
     double& Alpha, int64 CurrWalk, TRnd& Rnd,
     TVVec<TFlt, int64>& SynNeg, TVVec<TFlt, int64>& SynPos)  {
@@ -108,34 +109,67 @@ void TrainModel(TVVec<TInt, int64>& WalksVV, const int& Dimensions,
       Alpha = StartAlpha * (1 - WordCntAll / static_cast<double>(Iter * AllWords + 1));
       if ( Alpha < StartAlpha * 0.0001 ) { Alpha = StartAlpha * 0.0001; }
     }
-    int64 Word = WalkV[WordI];
+	  // This algorithm first fixes an output word then iterates on input words
+	  // opposite to paper's approach where input word is central
+	  // and output words are chosen from its neighborhood
+    int64 Word = WalkV[WordI]; // output word
     for (int i = 0; i < Dimensions; i++) {
       Neu1eV[i] = 0;
     }
     int Offset = Rnd.GetUniDevInt() % WinSize;
     for (int a = Offset; a < WinSize * 2 + 1 - Offset; a++) {
-      if (a == WinSize) { continue; }
+      if (a == WinSize) { continue; } // output word itself at index "WordI - WinSize + WinSize"
       int64 CurrWordI = WordI - WinSize + a;
       if (CurrWordI < 0){ continue; }
       if (CurrWordI >= WalkV.Len()){ continue; }
       int64 CurrWord = WalkV[CurrWordI];
+	    int64 CurrWordOriginal = RnmBackH.GetDat(CurrWord); // word id before normalization
+	    int CurrWordRole = CurrWordOriginal % roleCount;
+	    int64 baseWord = CurrWordOriginal / roleCount;
       for (int i = 0; i < Dimensions; i++) { Neu1eV[i] = 0; }
-      //negative sampling
-      for (int j = 0; j < NegSamN+1; j++) {
-        int64 Target, Label;
-        if (j == 0) {
+      // negative sampling
+      for (int n = 0; n < NegSamN + roleCount; n++) {
+        int64 Target = 0, Label;
+	      if (n == 0) {
+	        // The output word as the only positive sample (done inside the negative sampling loop)
           Target = Word;
           Label = 1;
-        } else {
+//		      printf("Sample [%d]: positive\n", n + 1);
+				} else if (n < roleCount){
+					// Additionally sample other "in" roles of the original input word (CurrWord)
+					// For role count = 4, words with original ids  3 x w + [1, 2, 3]
+			    // are "in" roles of base word w. For example, if 2in+ is close to 4in-,
+			    // 2in+ should be far from 2in- (other role of input word)
+					if(roleNegativeSampling && CurrWordRole != 0 && CurrWordRole != n){
+						int64 originalId = baseWord * roleCount + n;
+						if(!RnmH.IsKey(originalId)){
+//							printf("Sample [%d]: other role %d not found for %d[%d]\n", n + 1,
+//							originalId,  CurrWordOriginal, CurrWord);
+							continue;
+						}
+						Target = RnmH.GetDat(originalId);
+//						printf("Sample [%d]: role Based %d[%d] for %d[%d]\n", n + 1, originalId, Target,
+//							CurrWordOriginal, CurrWord);
+//						fflush(stdout);
+						Label = 0;
+					}else{
+						continue;
+					}
+			  } else {
+	        // Sample a negative (output) word w proportional to frequency(w) ^ (3/4)
           Target = RndUnigramInt(KTable, UTable, Rnd);
-          if (Target == Word) { continue; }
+          if (Target == Word) { continue; } // output word is a positive sample
           Label = 0;
+//				  printf("Sample [%d]: random\n", n + 1);
         }
+//	      printf("Sample [%d]: %d[%d] for %d[%d]\n", n + 1, RnmBackH.GetDat(Target), Target,
+//		      CurrWordOriginal, CurrWord);
+	      // Inner product of input (cur) word with nth negative (positive) sample
         double Product = 0;
         for (int i = 0; i < Dimensions; i++) {
           Product += SynPos(CurrWord,i) * SynNeg(Target,i);
         }
-        double Grad;                     //Gradient multiplied by learning rate
+        double Grad; //Gradient multiplied by learning rate
         if (Product > MaxExp) { Grad = (Label - 1) * Alpha; }
         else if (Product < -MaxExp) { Grad = Label * Alpha; }
         else {
@@ -147,6 +181,8 @@ void TrainModel(TVVec<TInt, int64>& WalksVV, const int& Dimensions,
           SynNeg(Target,i) += Grad * SynPos(CurrWord,i);
         }
       }
+	    // Add gradient of positive sample and negative samples
+	    // to the positive embedding of input word
       for (int i = 0; i < Dimensions; i++) {
         SynPos(CurrWord,i) += Neu1eV[i];
       }
@@ -157,7 +193,8 @@ void TrainModel(TVVec<TInt, int64>& WalksVV, const int& Dimensions,
 
 
 void LearnEmbeddings(TVVec<TInt, int64>& WalksVV, const int& Dimensions,
-  const int& WinSize, const int& Iter, const bool& Verbose,
+  const int& WinSize, const int& roleCount, const bool& roleNegativeSampling,
+	const int& Iter, const bool& Verbose,
   TIntFltVH& EmbeddingsHV) {
   TIntIntH RnmH;
   TIntIntH RnmBackH;
@@ -176,6 +213,10 @@ void LearnEmbeddings(TVVec<TInt, int64>& WalksVV, const int& Dimensions,
   }
   TIntV Vocab(NNodes);
   LearnVocab(WalksVV, Vocab);
+//	for (int v = 0 ; v < Vocab.Len() ; v++){
+//		printf("word: %d, count: %d\n", RnmBackH.GetDat(v), Vocab[v]);
+//	}
+//	fflush(stdout);
   TIntV KTable(NNodes);
   TFltV UTable(NNodes);
   TVVec<TFlt, int64> SynNeg;
@@ -195,9 +236,10 @@ void LearnEmbeddings(TVVec<TInt, int64>& WalksVV, const int& Dimensions,
 // op RS 2016/09/26, collapse does not compile on Mac OS X
 //#pragma omp parallel for schedule(dynamic) collapse(2)
   for (int j = 0; j < Iter; j++) {
-#pragma omp parallel for schedule(dynamic)
+ #pragma omp parallel for schedule(dynamic)
     for (int64 i = 0; i < WalksVV.GetXDim(); i++) {
-      TrainModel(WalksVV, Dimensions, WinSize, Iter, Verbose, KTable, UTable,
+      TrainModel(WalksVV, RnmH, RnmBackH, Dimensions, WinSize, roleCount,
+		   roleNegativeSampling, Iter, Verbose, KTable, UTable,
        WordCntAll, ExpTable, Alpha, i, Rnd, SynNeg, SynPos);
     }
   }

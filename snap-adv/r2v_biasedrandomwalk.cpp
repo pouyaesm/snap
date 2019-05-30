@@ -252,7 +252,7 @@ void PreprocessTransitionProbs(PWNet& InNet, const double& ParamP, const double&
   for (TWNet::TNodeI NI = InNet->BegNI(); NI < InNet->EndNI(); NI++) {
     NIds.Add(NI.GetId());
   }
- // #pragma omp parallel for schedule(dynamic)
+ #pragma omp parallel for schedule(dynamic)
   for (int64 i = 0; i < NIds.Len(); i++) {
 	  TWNet::TNodeI preI = InNet->GetNI(NIds[i]);
     PreprocessNode(InNet, ParamP, ParamQ, roleCount, roleWeight, stayP, preI, NCnt, Verbose);

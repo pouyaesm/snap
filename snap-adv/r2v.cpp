@@ -6,7 +6,7 @@ void role2vec(PWNet& InNet, const int& Dimensions, const int& WalkLen, const int
   const bool& OutputWalks, TVVec<TInt, int64>& WalksVV,
 	TIntFltVH& EmbeddingsHV, const double& ParamP, const double& ParamQ,
 	const int& roleCount, TFltV& roleWeight,
-	const double& stayP, const double& teleportP) {
+	const double& stayP, const double& teleportP, const bool& roleNegativeSampling) {
   //Preprocess transition probabilities
   PreprocessTransitionProbs(InNet, ParamP, ParamQ, roleCount, roleWeight, stayP, Verbose);
   TIntV NIdsV;
@@ -40,7 +40,8 @@ void role2vec(PWNet& InNet, const int& Dimensions, const int& WalkLen, const int
   }
   //Learning embeddings
   if (!OutputWalks) {
-    LearnEmbeddings(WalksVV, Dimensions, WinSize, Iter, Verbose, EmbeddingsHV);
+    LearnEmbeddings(WalksVV, Dimensions, WinSize, roleCount, roleNegativeSampling,
+		  Iter, Verbose, EmbeddingsHV);
   }
 }
 
