@@ -137,9 +137,9 @@ void TrainModel(TVVec<TInt, int64>& WalksVV, TIntIntH& RnmH, TIntIntH& RnmBackH,
 //		      printf("Sample [%d]: positive\n", n + 1);
 				} else if (n < roleCount){
 					// Additionally sample other "in" roles of the original input word (CurrWord)
-					// For role count = 4, words with original ids  3 x w + [1, 2, 3]
+					// For role count = 4, words with ids  3 x w + [1, 2, 3]
 			    // are "in" roles of base word w. For example, if 2in+ is close to 4in-,
-			    // 2in+ should be far from 2in- (other role of input word)
+			    // 2in+ should be far from 2in- (other role of input word '2')
 					if(roleNegativeSampling && CurrWordRole != 0 && CurrWordRole != n){
 						int64 originalId = baseWord * roleCount + n;
 						if(!RnmH.IsKey(originalId)){
