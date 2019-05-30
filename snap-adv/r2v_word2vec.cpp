@@ -164,7 +164,8 @@ void TrainModel(TVVec<TInt, int64>& WalksVV, TIntIntH& RnmH, TIntIntH& RnmBackH,
         }
 //	      printf("Sample [%d]: %d[%d] for %d[%d]\n", n + 1, RnmBackH.GetDat(Target), Target,
 //		      CurrWordOriginal, CurrWord);
-	      // Inner product of input (cur) word with nth negative (positive) sample
+	      // Inner product of input (cur) word with nth negative (positive) output sample
+	      // input vector is named SynPos, and output vector is named SynNeg
         double Product = 0;
         for (int i = 0; i < Dimensions; i++) {
           Product += SynPos(CurrWord,i) * SynNeg(Target,i);
