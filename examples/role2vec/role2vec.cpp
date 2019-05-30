@@ -34,7 +34,7 @@ TFltV getFltV(TStr line){
 
 void ParseArgs(int& argc, char* argv[], TStr& InFile, TStr& OutFile,
  int& Dimensions, int& WalkLen, int& NumWalks, int& WinSize, int& Iter,
- bool& Verbose, bool& Weighted,
+ bool& Verbose, double& ParamP, double& ParamQ, bool& Weighted,
 	bool& OutputWalks, int& roleCount, TFltV& roleWeight, double& stayP, double& teleportP) {
   Env = TEnv(argc, argv, TNotify::StdNotify);
   Env.PrepArgs(TStr::Fmt("\nAn algorithmic framework for representational learning on graphs."));
@@ -52,14 +52,19 @@ void ParseArgs(int& argc, char* argv[], TStr& InFile, TStr& OutFile,
    "Context size for optimization. Default is 10");
   Iter = Env.GetIfArgPrefixInt("-e:", 1,
    "Number of epochs in SGD. Default is 1");
+	ParamP = Env.GetIfArgPrefixFlt("-p:", 1,
+   "Return hyperparameter. Default is 1");
+  ParamQ = Env.GetIfArgPrefixFlt("-q:", 1,
+   "Inout hyperparameter. Default is 1");
 	roleCount = Env.GetIfArgPrefixInt("-rc:", 1,
-	 "Number of node roles in n-partite graph, role 'out' is assumed to have id = tc * i. Default is 1.");
+	 "Number of node roles in bipartite graph (including role 'out'). Default is 1.");
+	stayP = Env.GetIfArgPrefixFlt("-sp:", -1,
+	  "Probability of staying in the same node role."
+		" For a negative value, node2vec probabilities are used. Default is -1.");
 	TStr initRoleWeight(repeat_string("1,", roleCount - 1).c_str());
 	roleWeight = getFltV(Env.GetIfArgPrefixStr("-rw:", initRoleWeight,
-	 "Weight of each role (role 'out' is excluded) to be chosen by random walker, "
+	 "Weight of each role (role 0 'out' is excluded) to be chosen by random walker, "
 	 "nth weight is for nodes with role 'n' having id = tc * i + n. Default is '1,1,..'."));
-	stayP = Env.GetIfArgPrefixFlt("-sp:", 0.75,
-	  "Probability of staying in the same node role. Default is 0.75.");
   teleportP = Env.GetIfArgPrefixFlt("-tp:", 0,
 	  "Probability of teleporting from an 'in' node to its corresponding 'out' node. Default is 0.");
   Verbose = Env.IsArgStr("-v", "Verbose output.");
@@ -139,15 +144,17 @@ int main(int argc, char* argv[]) {
 	TFltV roleWeight;
 	double stayP;
 	double teleportP;
+	double ParamP, ParamQ;
   bool Weighted, Verbose, OutputWalks;
   ParseArgs(argc, argv, InFile, OutFile, Dimensions, WalkLen, NumWalks, WinSize,
-		Iter, Verbose, Weighted, OutputWalks, roleCount, roleWeight, stayP, teleportP);
+		Iter, Verbose, ParamP, ParamQ, Weighted, OutputWalks, roleCount, roleWeight, stayP, teleportP);
   PWNet InNet = PWNet::New();
   TIntFltVH EmbeddingsHV;
   TVVec <TInt, int64> WalksVV;
   ReadGraph(InFile, Weighted, Verbose, InNet);
   role2vec(InNet, Dimensions, WalkLen, NumWalks, WinSize, Iter,
-		Verbose, OutputWalks, WalksVV, EmbeddingsHV, roleCount, roleWeight, stayP, teleportP);
+		Verbose, OutputWalks, WalksVV, EmbeddingsHV, ParamP, ParamQ,
+		roleCount, roleWeight, stayP, teleportP);
   WriteOutput(OutFile, EmbeddingsHV, WalksVV, OutputWalks);
   return 0;
 }

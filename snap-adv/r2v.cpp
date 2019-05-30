@@ -4,10 +4,11 @@
 void role2vec(PWNet& InNet, const int& Dimensions, const int& WalkLen, const int& NumWalks,
   const int& WinSize, const int& Iter, const bool& Verbose,
   const bool& OutputWalks, TVVec<TInt, int64>& WalksVV,
-	TIntFltVH& EmbeddingsHV, const int& roleCount, TFltV& roleWeight,
+	TIntFltVH& EmbeddingsHV, const double& ParamP, const double& ParamQ,
+	const int& roleCount, TFltV& roleWeight,
 	const double& stayP, const double& teleportP) {
   //Preprocess transition probabilities
-  PreprocessTransitionProbs(InNet, roleCount, roleWeight, stayP, Verbose);
+  PreprocessTransitionProbs(InNet, ParamP, ParamQ, roleCount, roleWeight, stayP, Verbose);
   TIntV NIdsV;
   for (TWNet::TNodeI NI = InNet->BegNI(); NI < InNet->EndNI(); NI++) {
     NIdsV.Add(NI.GetId());

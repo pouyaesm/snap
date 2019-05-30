@@ -11,7 +11,8 @@
 void role2vec(PWNet& InNet, const int& Dimensions, const int& WalkLen, const int& NumWalks,
   const int& WinSize, const int& Iter, const bool& Verbose,
   const bool& OutputWalks, TVVec<TInt, int64>& WalksVV,
-	TIntFltVH& EmbeddingsHV, const int& typeCount, TFltV& typeWeight,
+	TIntFltVH& EmbeddingsHV, const double& ParamP, const double& ParamQ,
+	const int& roleCount, TFltV& roleWeight,
 	const double& stayP, const double& teleportP);
 
 #endif //R2V_H

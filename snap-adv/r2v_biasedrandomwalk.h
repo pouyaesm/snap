@@ -8,7 +8,8 @@ typedef TPt<TWNet> PWNet;
 //void printTransitionProbabilities(PWNet& InNet, const int& typeCount);
 
 ///Preprocesses transition probabilities for random walks. Has to be called once before SimulateWalk calls
-void PreprocessTransitionProbs(PWNet& InNet, const int& typeCount, TFltV& typeWeight,
+void PreprocessTransitionProbs(PWNet& InNet, const double& ParamP, const double& ParamQ,
+	const int& typeCount, TFltV& typeWeight,
 	const double& stayP, const bool& verbose);
 
 ///Simulates one walk and writes it into Walk vector

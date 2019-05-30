@@ -5,6 +5,7 @@
 //Code from https://github.com/nicholas-leonard/word2vec/blob/master/word2vec.c
 //Customized for SNAP and node2vec
 
+// Number of times each word Vocab[i] is repeated in the collection of random walks WalksVV
 void LearnVocab(TVVec<TInt, int64>& WalksVV, TIntV& Vocab) {
   for( int64 i = 0; i < Vocab.Len(); i++) { Vocab[i] = 0; }
   for( int64 i = 0; i < WalksVV.GetXDim(); i++) {
@@ -94,7 +95,6 @@ void TrainModel(TVVec<TInt, int64>& WalksVV, const int& Dimensions,
     TIntV& KTable, TFltV& UTable, int64& WordCntAll, TFltV& ExpTable,
     double& Alpha, int64 CurrWalk, TRnd& Rnd,
     TVVec<TFlt, int64>& SynNeg, TVVec<TFlt, int64>& SynPos)  {
-  TFltV Neu1V(Dimensions);
   TFltV Neu1eV(Dimensions);
   int64 AllWords = WalksVV.GetXDim()*WalksVV.GetYDim();
   TIntV WalkV(WalksVV.GetYDim());
@@ -110,7 +110,6 @@ void TrainModel(TVVec<TInt, int64>& WalksVV, const int& Dimensions,
     }
     int64 Word = WalkV[WordI];
     for (int i = 0; i < Dimensions; i++) {
-      Neu1V[i] = 0;
       Neu1eV[i] = 0;
     }
     int Offset = Rnd.GetUniDevInt() % WinSize;
@@ -139,11 +138,11 @@ void TrainModel(TVVec<TInt, int64>& WalksVV, const int& Dimensions,
         double Grad;                     //Gradient multiplied by learning rate
         if (Product > MaxExp) { Grad = (Label - 1) * Alpha; }
         else if (Product < -MaxExp) { Grad = Label * Alpha; }
-        else { 
+        else {
           double Exp = ExpTable[static_cast<int>(Product*ExpTablePrecision)+TableSize/2];
           Grad = (Label - 1 + 1 / (1 + Exp)) * Alpha;
         }
-        for (int i = 0; i < Dimensions; i++) { 
+        for (int i = 0; i < Dimensions; i++) {
           Neu1eV[i] += Grad * SynNeg(Target,i);
           SynNeg(Target,i) += Grad * SynPos(CurrWord,i);
         }
@@ -199,7 +198,7 @@ void LearnEmbeddings(TVVec<TInt, int64>& WalksVV, const int& Dimensions,
 #pragma omp parallel for schedule(dynamic)
     for (int64 i = 0; i < WalksVV.GetXDim(); i++) {
       TrainModel(WalksVV, Dimensions, WinSize, Iter, Verbose, KTable, UTable,
-       WordCntAll, ExpTable, Alpha, i, Rnd, SynNeg, SynPos); 
+       WordCntAll, ExpTable, Alpha, i, Rnd, SynNeg, SynPos);
     }
   }
   if (Verbose) { printf("\n"); fflush(stdout); }
