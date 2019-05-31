@@ -113,6 +113,9 @@ void TrainModel(TVVec<TInt, int64>& WalksVV, TIntIntH& RnmH, TIntIntH& RnmBackH,
 	  // opposite to paper's approach where input word is central
 	  // and output words are chosen from its neighborhood
     int64 Word = WalkV[WordI]; // output word
+	  int64 WordOriginal = RnmBackH.GetDat(Word); // word id before normalization
+	  int WordRole = WordOriginal % roleCount;
+	  int64 baseWord = WordOriginal / roleCount;
     for (int i = 0; i < Dimensions; i++) {
       Neu1eV[i] = 0;
     }
@@ -123,24 +126,22 @@ void TrainModel(TVVec<TInt, int64>& WalksVV, TIntIntH& RnmH, TIntIntH& RnmBackH,
       if (CurrWordI < 0){ continue; }
       if (CurrWordI >= WalkV.Len()){ continue; }
       int64 CurrWord = WalkV[CurrWordI];
-	    int64 CurrWordOriginal = RnmBackH.GetDat(CurrWord); // word id before normalization
-	    int CurrWordRole = CurrWordOriginal % roleCount;
-	    int64 baseWord = CurrWordOriginal / roleCount;
       for (int i = 0; i < Dimensions; i++) { Neu1eV[i] = 0; }
       // negative sampling
+//	    printf("\nSamples for relation (%d, %d): ", RnmBackH.GetDat(CurrWord), WordOriginal);
       for (int n = 0; n < NegSamN + roleCount; n++) {
         int64 Target = 0, Label;
 	      if (n == 0) {
 	        // The output word as the only positive sample (done inside the negative sampling loop)
           Target = Word;
           Label = 1;
-//		      printf("Sample [%d]: positive\n", n + 1);
+//		      printf("%d (positive), ", RnmBackH.GetDat(Target));
 				} else if (n < roleCount){
-					// Additionally sample other "in" roles of the original input word (CurrWord)
+					// Additionally sample other "in" roles of the original output word (Word)
 					// For role count = 4, words with ids  3 x w + [1, 2, 3]
 			    // are "in" roles of base word w. For example, if 2in+ is close to 4in-,
 			    // 2in+ should be far from 2in- (other role of input word '2')
-					if(roleNegativeSampling && CurrWordRole != 0 && CurrWordRole != n){
+					if(roleNegativeSampling && WordRole != 0 && WordRole != n){
 						int64 originalId = baseWord * roleCount + n;
 						if(!RnmH.IsKey(originalId)){
 //							printf("Sample [%d]: other role %d not found for %d[%d]\n", n + 1,
@@ -148,9 +149,7 @@ void TrainModel(TVVec<TInt, int64>& WalksVV, TIntIntH& RnmH, TIntIntH& RnmBackH,
 							continue;
 						}
 						Target = RnmH.GetDat(originalId);
-//						printf("Sample [%d]: role Based %d[%d] for %d[%d]\n", n + 1, originalId, Target,
-//							CurrWordOriginal, CurrWord);
-//						fflush(stdout);
+//						printf("%d (other roles), ", RnmBackH.GetDat(Target));
 						Label = 0;
 					}else{
 						continue;
@@ -158,12 +157,11 @@ void TrainModel(TVVec<TInt, int64>& WalksVV, TIntIntH& RnmH, TIntIntH& RnmBackH,
 			  } else {
 	        // Sample a negative (output) word w proportional to frequency(w) ^ (3/4)
           Target = RndUnigramInt(KTable, UTable, Rnd);
-          if (Target == Word) { continue; } // output word is a positive sample
+				  // output word is a positive sample, also do not select the input node itself
+          if (Target == Word || Target == CurrWord) { continue; }
           Label = 0;
-//				  printf("Sample [%d]: random\n", n + 1);
+//					printf("%d (random), ", RnmBackH.GetDat(Target));
         }
-//	      printf("Sample [%d]: %d[%d] for %d[%d]\n", n + 1, RnmBackH.GetDat(Target), Target,
-//		      CurrWordOriginal, CurrWord);
 	      // Inner product of input (cur) word with nth negative (positive) output sample
 	      // input vector is named SynPos, and output vector is named SynNeg
         double Product = 0;
@@ -182,6 +180,7 @@ void TrainModel(TVVec<TInt, int64>& WalksVV, TIntIntH& RnmH, TIntIntH& RnmBackH,
           SynNeg(Target,i) += Grad * SynPos(CurrWord,i);
         }
       }
+//	    fflush(stdout);
 	    // Add gradient of positive sample and negative samples
 	    // to the positive embedding of input word
       for (int i = 0; i < Dimensions; i++) {
