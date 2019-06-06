@@ -112,40 +112,44 @@ void TrainModel(TVVec<TInt, int64>& WalksVV, TIntIntH& RnmH, TIntIntH& RnmBackH,
 	  // This algorithm first fixes an output word then iterates on input words
 	  // opposite to paper's approach where input word is central
 	  // and output words are chosen from its neighborhood
-    int64 Word = WalkV[WordI]; // output word
-	  int64 WordOriginal = RnmBackH.GetDat(Word); // word id before normalization
-	  int WordRole = WordOriginal % roleCount;
-	  int64 baseWord = WordOriginal / roleCount;
+    int64 OutWord = WalkV[WordI]; // output word
+	  int64 OutWordOriginal = RnmBackH.GetDat(OutWord); // word id before normalization
+	  int OutWordRole = OutWordOriginal % roleCount;
+	  int64 baseWord = OutWordOriginal / roleCount;
     for (int i = 0; i < Dimensions; i++) {
       Neu1eV[i] = 0;
     }
     int Offset = Rnd.GetUniDevInt() % WinSize;
     for (int a = Offset; a < WinSize * 2 + 1 - Offset; a++) {
       if (a == WinSize) { continue; } // output word itself at index "WordI - WinSize + WinSize"
-      int64 CurrWordI = WordI - WinSize + a;
-      if (CurrWordI < 0){ continue; }
-      if (CurrWordI >= WalkV.Len()){ continue; }
-      int64 CurrWord = WalkV[CurrWordI];
+      int64 InWordI = WordI - WinSize + a;
+      if (InWordI < 0){ continue; }
+      if (InWordI >= WalkV.Len()){ continue; }
+      int64 InWord = WalkV[InWordI]; // input word
+	    int64 InWordOriginal = RnmBackH.GetDat(InWord); // word id before normalization
+	    int InWordRole = InWordOriginal % roleCount;
       for (int i = 0; i < Dimensions; i++) { Neu1eV[i] = 0; }
       // negative sampling
-//	    printf("\nSamples for relation (%d, %d): ", RnmBackH.GetDat(CurrWord), WordOriginal);
+//	    printf("\nSamples for relation (%d, %d): ", RnmBackH.GetDat(InWord), InWordOriginal);
       for (int n = 0; n < NegSamN + roleCount; n++) {
         int64 Target = 0, Label;
 	      if (n == 0) {
 	        // The output word as the only positive sample (done inside the negative sampling loop)
-          Target = Word;
+          Target = OutWord;
           Label = 1;
 //		      printf("%d (positive), ", RnmBackH.GetDat(Target));
 				} else if (n < roleCount){
-					// Additionally sample other "in" roles of the original output word (Word)
+					// If input word is of type 'out', 
+					// sample other "in" roles of the original output word (Word)
+					// For example, if pair is (2out, 4in-), 2out should be far from 4in+ 
 					// For role count = 4, words with ids  3 x w + [1, 2, 3]
-			    // are "in" roles of base word w. For example, if 2in+ is close to 4in-,
-			    // 2in+ should be far from 4in+ (other role of output word '4')
-					if(roleNegativeSampling && WordRole != 0 && WordRole != n){
+			    // are "in" roles of base word w. 
+					if(roleNegativeSampling && InWordRole == 0 && 
+						OutWordRole != 0 && OutWordRole != n){
 						int64 otherRoleId = baseWord * roleCount + n;
 						if(!RnmH.IsKey(otherRoleId)){
 //							printf("Sample [%d]: other role %d not found for %d[%d]\n", n + 1,
-//							originalId,  CurrWordOriginal, CurrWord);
+//							otherRoleId,  InWordOriginal, CurrWord);
 							continue;
 						}
 						Target = RnmH.GetDat(otherRoleId);
@@ -158,7 +162,7 @@ void TrainModel(TVVec<TInt, int64>& WalksVV, TIntIntH& RnmH, TIntIntH& RnmBackH,
 	        // Sample a negative (output) word w proportional to frequency(w) ^ (3/4)
           Target = RndUnigramInt(KTable, UTable, Rnd);
 				  // output word is a positive sample, also do not select the input node itself
-          if (Target == Word || Target == CurrWord) { continue; }
+          if (Target == OutWord || Target == InWord) { continue; }
           Label = 0;
 //					printf("%d (random), ", RnmBackH.GetDat(Target));
         }
@@ -166,7 +170,7 @@ void TrainModel(TVVec<TInt, int64>& WalksVV, TIntIntH& RnmH, TIntIntH& RnmBackH,
 	      // input vector is named SynPos, and output vector is named SynNeg
         double Product = 0;
         for (int i = 0; i < Dimensions; i++) {
-          Product += SynPos(CurrWord,i) * SynNeg(Target,i);
+          Product += SynPos(InWord,i) * SynNeg(Target,i);
         }
         double Grad; //Gradient multiplied by learning rate
         if (Product > MaxExp) { Grad = (Label - 1) * Alpha; }
@@ -177,14 +181,14 @@ void TrainModel(TVVec<TInt, int64>& WalksVV, TIntIntH& RnmH, TIntIntH& RnmBackH,
         }
         for (int i = 0; i < Dimensions; i++) {
           Neu1eV[i] += Grad * SynNeg(Target,i);
-          SynNeg(Target,i) += Grad * SynPos(CurrWord,i);
+          SynNeg(Target,i) += Grad * SynPos(InWord,i);
         }
       }
 //	    fflush(stdout);
 	    // Add gradient of positive sample and negative samples
 	    // to the positive embedding of input word
       for (int i = 0; i < Dimensions; i++) {
-        SynPos(CurrWord,i) += Neu1eV[i];
+        SynPos(InWord,i) += Neu1eV[i];
       }
     }
     WordCntAll++;
